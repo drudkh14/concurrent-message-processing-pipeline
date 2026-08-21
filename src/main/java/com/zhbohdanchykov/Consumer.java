@@ -27,36 +27,55 @@ public class Consumer implements Callable<Integer> {
     }
 
     @Override
-    public Integer call() {
+    public Integer call() throws JMSException {
+        Session session = null;
         AtomicInteger messageCount = new AtomicInteger(0);
         MessagePOJO messagePOJO = null;
-        try (
-                Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
-                MessageConsumer consumer = session.createConsumer(session.createQueue(queue))
-        ) {
+        try {
+            session = connection.createSession(false, Session.SESSION_TRANSACTED);
+            MessageConsumer consumer = session.createConsumer(session.createQueue(queue));
             boolean reading = true;
 
+            TextMessage textMessage;
+            String text;
             while (reading) {
-                TextMessage textMessage = (TextMessage) consumer.receive();
-                String text = textMessage.getText();
+                textMessage = (TextMessage) consumer.receive();
+                text = textMessage.getText();
                 LOGGER.debug("Message received: {}", text);
                 messagePOJO = MAPPER.readValue(text, MessagePOJO.class);
                 LOGGER.debug("Message serialized into MessagePOJO {}", messagePOJO);
                 if (!messagePOJO.getIsPoisonPill()) {
-                    router.routeMessage(messagePOJO);
                     messageCount.incrementAndGet();
                 } else {
                     LOGGER.info("Received poison pill");
                     reading = false;
                     LOGGER.info("Messages from a consumer received: {}", messageCount);
-                    router.routeMessage(messagePOJO);
+                }
+                session.commit();
+                router.routeMessage(messagePOJO);
+            }
+
+            while ((textMessage = (TextMessage) consumer.receiveNoWait()).getJMSRedelivered()) {
+                text = textMessage.getText();
+                LOGGER.debug("Redelivered message received: {}", text);
+                messagePOJO = MAPPER.readValue(text, MessagePOJO.class);
+                LOGGER.debug("Message serializer into MessagePOJO {}", messagePOJO);
+                if (!messagePOJO.getIsPoisonPill())
+                    messageCount.incrementAndGet();
+                else {
+                    session.rollback();
                 }
             }
         } catch (JMSException e) {
+            if (session != null) {
+                session.rollback();
+            }
             LOGGER.error("Failed to start consumer.", e);
         } catch (JsonProcessingException e) {
+            session.rollback();
             LOGGER.error("Failed to parse JSON message.", e);
         } catch (InterruptedException e) {
+            session.rollback();
             LOGGER.error("Failed to put a message {} in a BlockingQueue.", messagePOJO, e);
             Thread.currentThread().interrupt();
         }
