@@ -2,20 +2,24 @@ package com.zhbohdanchykov;
 
 import jakarta.jms.Connection;
 import jakarta.jms.JMSException;
+import jakarta.validation.Validator;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 public class Application {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Application.class);
+    private static final Logger PRINTER = LoggerFactory.getLogger("PrinterLogger");
 
     private static final int THREADS_NUMBER = 10;
+    private static final int THREAD_NUMBERS_WRITERS = 2;
+    public static final int TIMEOUT = 600;
 
     private static final String VALID_FILENAME = "valid_messages.csv";
     private static final String INVALID_FILENAME = "invalid_messages.csv";
@@ -26,44 +30,76 @@ public class Application {
     private static final BlockingQueue<MessagePOJO> INVALID_QUEUE = new LinkedBlockingQueue<>();
 
     private final ProjectProperties properties;
+    private final Validator validator;
 
-    public Application(ProjectProperties properties) {
+    public Application(ProjectProperties properties, Validator validator) {
         this.properties = properties;
+        this.validator = validator;
     }
 
     public void start() {
-        ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(properties.getUrl());
-        factory.setTrustedPackages(List.of("com.zhbohdanchykov.MessagePOJO"));
+        ActiveMQConnectionFactory activeMQConnectionFactory = new ActiveMQConnectionFactory(properties.getUrl());
+        activeMQConnectionFactory.setTrustedPackages(List.of("com.zhbohdanchykov.MessagePOJO"));
 
         try (
-                Connection connection = factory.createConnection()) {
+                Connection connection = activeMQConnectionFactory.createConnection()
+        ) {
             connection.start();
 
-            ExecutorServiceManager manager = new ExecutorServiceManager(THREADS_NUMBER);
+            List<ExecutorServiceManagerEntry<Integer>> entries = prepareEntries(connection,
+                    MessageGenerator::generate,
+                    new MessageRouter(VALID_QUEUE, INVALID_QUEUE, validator)
+            );
 
-            ArrayList<Producer> producers = prepareProducers(connection);
-            ArrayList<Consumer> consumers = prepareConsumers(connection);
-            ArrayList<WriterCSV> writers = prepareWriters();
+            ExecutorServiceManager<Integer> manager = new ExecutorServiceManager<>(entries, TIMEOUT);
 
             long startTime = System.currentTimeMillis();
 
-            manager.launch(producers, consumers, writers);
+            manager.launch();
             manager.terminate();
-            ProcessingResults results = manager.getResults();
+
+            ProcessingResults results = getResults(entries);
 
             long endTime = System.currentTimeMillis();
             float elapsedTime = (float) (endTime - startTime) / 1000;
             LOGGER.info("Time: {} s", elapsedTime);
+            PRINTER.info("Time: {} s", elapsedTime);
             LOGGER.info("Total messages sent: {}", results.messagesSent());
+            PRINTER.info("Total messages sent: {}", results.messagesSent());
             LOGGER.info("Total messages received: {}", results.messagesReceived());
+            PRINTER.info("Total messages received: {}", results.messagesReceived());
             LOGGER.info("Total messages written: {}", results.messagesWritten());
+            PRINTER.info("Total messages written: {}", results.messagesWritten());
             LOGGER.info("Messages per second: {}", results.messagesWritten() / elapsedTime);
+            PRINTER.info("Messages per second: {}", results.messagesWritten() / elapsedTime);
         } catch (JMSException e) {
             LOGGER.error("Failed to create a JMS connection.");
         }
     }
 
-    private ArrayList<Producer> prepareProducers(Connection connection) {
+    private List<ExecutorServiceManagerEntry<Integer>> prepareEntries(
+            Connection connection, Supplier<MessagePOJO> generator, MessageRouter router
+    ) {
+        List<ExecutorServiceManagerEntry<Integer>> res = new ArrayList<>();
+
+        ExecutorServiceManagerEntry<Integer> producersEntry = new ExecutorServiceManagerEntry<>(
+                Executors.newFixedThreadPool(THREADS_NUMBER), prepareProducers(connection, generator), new ArrayList<>()
+        );
+        ExecutorServiceManagerEntry<Integer> consumersEntry = new ExecutorServiceManagerEntry<>(
+                Executors.newFixedThreadPool(THREADS_NUMBER), prepareConsumers(connection, router), new ArrayList<>()
+        );
+        ExecutorServiceManagerEntry<Integer> writersEntry = new ExecutorServiceManagerEntry<>(
+                Executors.newFixedThreadPool(THREAD_NUMBERS_WRITERS), prepareWriters(), new ArrayList<>()
+        );
+
+        res.add(producersEntry);
+        res.add(consumersEntry);
+        res.add(writersEntry);
+
+        return res;
+    }
+
+    private ArrayList<Producer> prepareProducers(Connection connection, Supplier<MessagePOJO> messageGenerator) {
         ArrayList<Producer> res = new ArrayList<>();
 
         int messagesNumber = properties.getMessagesNumber();
@@ -74,19 +110,18 @@ public class Application {
         for (int i = 0; i < THREADS_NUMBER; i++) {
             if (i == THREADS_NUMBER - 1) {
                 res.add(new Producer(connection, queueName, batch + rest,
-                        properties.getStopTime()));
+                        properties.getStopTime(), MessageGenerator::generate));
             } else {
-                res.add(new Producer(connection, queueName, batch, properties.getStopTime()));
+                res.add(new Producer(connection, queueName, batch, properties.getStopTime(),
+                        messageGenerator));
             }
         }
 
         return res;
     }
 
-    private ArrayList<Consumer> prepareConsumers(Connection connection) {
+    private ArrayList<Consumer> prepareConsumers(Connection connection, MessageRouter router) {
         ArrayList<Consumer> res = new ArrayList<>();
-
-        MessageRouter router = new MessageRouter(VALID_QUEUE, INVALID_QUEUE);
 
         for (int i = 0; i < THREADS_NUMBER; i++) {
             res.add(new Consumer(connection, properties.getQueueName(), router));
@@ -103,4 +138,30 @@ public class Application {
 
         return res;
     }
+
+    private ProcessingResults getResults(List<ExecutorServiceManagerEntry<Integer>> entries) {
+        int totalMessagesSent = countResult(entries.get(0).results());
+        int totalMessagesReceived = countResult(entries.get(1).results());
+        int totalMessagesWritten = countResult(entries.get(1).results());
+
+        return new ProcessingResults(totalMessagesSent, totalMessagesReceived, totalMessagesWritten);
+    }
+
+    private int countResult(List<Future<Integer>> results) {
+        int res = 0;
+
+        for (Future<Integer> future : results) {
+            try {
+                res += future.get();
+            } catch (InterruptedException e) {
+                LOGGER.error("Failed getting result from {} because of interruption.", results);
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                LOGGER.error("Task from {} was failed.", results, e.getCause());
+            }
+        }
+
+        return res;
+    }
+
 }
