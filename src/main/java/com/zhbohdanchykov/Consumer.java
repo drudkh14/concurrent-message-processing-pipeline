@@ -32,7 +32,7 @@ public class Consumer implements Callable<Integer> {
         AtomicInteger messageCount = new AtomicInteger(0);
         MessagePOJO messagePOJO = null;
         try {
-            session = connection.createSession(false, Session.SESSION_TRANSACTED);
+            session = connection.createSession(true, Session.SESSION_TRANSACTED);
             MessageConsumer consumer = session.createConsumer(session.createQueue(queue));
             boolean reading = true;
 
