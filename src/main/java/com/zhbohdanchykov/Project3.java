@@ -41,6 +41,8 @@ public class Project3 {
 
         ActiveMQConnectionFactory connectionFactory = new ActiveMQConnectionFactory(properties.getUrl());
         connectionFactory.setTrustedPackages(List.of("com.zhbohdanchykov.MessagePOJO"));
+        connectionFactory.setUserName(System.getProperty("username"));
+        connectionFactory.setPassword("password");
 
         new Application(properties, validator, connectionFactory).start();
         LOGGER.info("Finished Main");
