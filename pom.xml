@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.zhbohdanchykov</groupId>
-  <artifactId>project-3</artifactId>
+  <artifactId>concurrent-message-processing-pipeline</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
@@ -124,7 +124,7 @@
           </excludes>
           <archive>
             <manifest>
-              <mainClass>com.zhbohdanchykov.Project3</mainClass>
+              <mainClass>com.zhbohdanchykov.Main</mainClass>
               <addClasspath>true</addClasspath>
               <classpathPrefix>lib/</classpathPrefix>
             </manifest>
@@ -213,7 +213,7 @@
 
               <archive>
                 <manifest>
-                  <mainClass>com.zhbohdanchykov.Project3</mainClass>
+                  <mainClass>com.zhbohdanchykov.Main</mainClass>
                 </manifest>
                 <manifestEntries>
                   <Class-Path>.</Class-Path>
@@ -255,7 +255,7 @@
                   <transformers>
                     <transformer
                             implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                      <mainClass>com.zhbohdanchykov.Project3</mainClass>
+                      <mainClass>com.zhbohdanchykov.Main</mainClass>
                       <manifestEntries>
                         <Class-Path>.</Class-Path>
                       </manifestEntries>

@@ -29,11 +29,12 @@ public class Consumer implements Callable<Integer> {
     @Override
     public Integer call() throws JMSException {
         Session session = null;
+        MessageConsumer consumer = null;
         AtomicInteger messageCount = new AtomicInteger(0);
         MessagePOJO messagePOJO = null;
         try {
             session = connection.createSession(true, Session.SESSION_TRANSACTED);
-            MessageConsumer consumer = session.createConsumer(session.createQueue(queue));
+            consumer = session.createConsumer(session.createQueue(queue));
             boolean reading = true;
 
             TextMessage textMessage;
@@ -78,6 +79,13 @@ public class Consumer implements Callable<Integer> {
             session.rollback();
             LOGGER.error("Failed to put a message {} in a BlockingQueue.", messagePOJO, e);
             Thread.currentThread().interrupt();
+        } finally {
+            if (session != null) {
+                session.close();
+            }
+            if (consumer != null) {
+                consumer.close();
+            }
         }
 
         return messageCount.get();

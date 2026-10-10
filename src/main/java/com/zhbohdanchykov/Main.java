@@ -12,11 +12,11 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-public class Project3 {
+public class Main {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Project3.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
-    private static final String PROPERTIES_FILENAME = "project3.properties";
+    private static final String PROPERTIES_FILENAME = "concurrent-message-processing-pipeline.properties";
 
     public static void main(String[] args) {
         LOGGER.info("Starting Main");

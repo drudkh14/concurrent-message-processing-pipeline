@@ -5,9 +5,9 @@ import jakarta.validation.ConstraintValidatorContext;
 
 public class CheckEddrValidator implements ConstraintValidator<CheckEddr, String> {
 
-    public static final int VALID_EDDR_LENGTH = 14;
-    public static final int VALID_EDDR_MINUS_POS = 8;
-    public static final int[] VALID_EDDR_WEIGHTS = {7, 3, 1};
+    private static final int VALID_EDDR_LENGTH = 14;
+    private static final int VALID_EDDR_MINUS_POS = 8;
+    private static final int[] VALID_EDDR_WEIGHTS = {7, 3, 1};
 
     @Override
     public void initialize(CheckEddr constraintAnnotation) {
@@ -22,7 +22,7 @@ public class CheckEddrValidator implements ConstraintValidator<CheckEddr, String
 
         if (!eddr.contains("-"))
             return false;
-        if (!(eddr.length() == VALID_EDDR_LENGTH))
+        if (eddr.length() != VALID_EDDR_LENGTH)
             return false;
         if (eddr.charAt(VALID_EDDR_MINUS_POS) != '-')
             return false;

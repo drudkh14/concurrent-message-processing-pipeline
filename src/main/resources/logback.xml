@@ -3,7 +3,7 @@
         <file>logs/project-3.log</file>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/project-3-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>logs/concurrent-message-processing-pipeline-%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory>
         </rollingPolicy>
 
