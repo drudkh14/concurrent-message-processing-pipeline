@@ -102,7 +102,7 @@ The configured message count is distributed among the producer tasks. The `stop`
 
 ### 1. Start ActiveMQ
 
-Start an ActiveMQ broker and ensure that it is accessible at the URL specified in `project3.properties`.
+Start an ActiveMQ broker and ensure that it is accessible at the URL specified in `concurrent-message-processing-pipeline.properties`.
 
 ### 2. Configure the application
 
